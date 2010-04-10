@@ -5,21 +5,15 @@ import cPickle as pickle
 import numpy as np
 
 import hadoopy
-from vitrieve_algorithms import knearest_neighbor_l1
-#from vitrieve_algorithms import nearest_neighbor
 
 
 class Mapper(object):
     def __init__(self):
         self.out_sums = {}
         with open(os.environ["CLUSTERS_PKL"]) as fp:
-            self.clusters = np.array([np.fromstring(x, dtype=np.float32)
-                                      for x in pickle.load(fp)])
-        if os.environ['NN_MODULE'] == 'L1':
-            nn = lambda x,y: knearest_neighbor_l1.nn(x, y, 1)[0][0]
-        #nearest_ind = nearest_neighbor.nn(feat, self.clusters)
-        #self.nn = __import__(,
-        #                     fromlist=['nn']).nn
+            self.clusters = pickle.load(fp)
+        self.nn = __import__(os.environ['NN_MODULE'],
+                             fromlist=['nn']).nn
         
     def map(self, key, feat):
         feat = np.fromstring(feat, dtype=np.float32)
