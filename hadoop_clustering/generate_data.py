@@ -14,10 +14,10 @@ class Mapper(object):
     def map(self, key, value):
         if not self.dead:
             self.dead = True
-            var = np.eye(self.num_dims)
-            for i in range(num_clusters):
+            var = .5 * np.eye(self.num_dims)
+            for i in range(self.num_clusters):
                 mu = [i] * self.num_dims
-                rnd = np.random.multivariate_normal(mu, var, num_points)
+                rnd = np.random.multivariate_normal(mu, var, self.num_points)
                 for j in np.array(rnd, dtype=np.float32):
                     yield i, j.tostring()
 

@@ -12,19 +12,22 @@ def mapper(key, value):
 class Reducer(object):
     def __init__(self, out_count=True):
         self.count = 0
-        self.num_clusters = int(os.environ['NUM_CLUSTERS'])
+        try:
+            self.num_clusters = int(os.environ['NUM_CLUSTERS'])
+        except KeyError:
+            self.num_clusters = 100
         self.output = self.yield_count if out_count else self.yield_key
 
     def yield_count(self, key, value):
-        yield self.count, value
+        return self.count, value
 
     def yield_key(self, key, value):
-        yield key, value
+        return key, value
         
     def reduce(self, key, values):
         for value in values:
             if self.count < self.num_clusters:
-                self.output(key, value)
+                yield self.output(key, value)
                 self.count += 1
 
 
