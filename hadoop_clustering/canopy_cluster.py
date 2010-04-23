@@ -13,7 +13,7 @@ class MapReduce(object):
         try:
             nn_mod = os.environ['NN_MODULE']
         except KeyError:
-            nn_mod = 'nn_l1'
+            nn_mod = 'nn_l2'
 
         self.nn = __import__(nn_mod,
                              fromlist=['nn']).nn
