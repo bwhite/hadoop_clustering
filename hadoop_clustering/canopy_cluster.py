@@ -18,10 +18,10 @@ class MapReduce(object):
         self.nn = __import__(nn_mod,
                              fromlist=['nn']).nn
         try:
-            self.soft_dist = os.environ['CANOPY_SOFT_DIST']
-            self.hard_dist = os.environ['CANOPY_HARD_DIST']
+            self.soft_dist = float(os.environ['CANOPY_SOFT_DIST'])
+            self.hard_dist = float(os.environ['CANOPY_HARD_DIST'])
         except KeyError:
-            self.soft_dist = 1
+            self.soft_dist = 1.
             self.hard_dist = .25
         
     def map(self, key, feat):
