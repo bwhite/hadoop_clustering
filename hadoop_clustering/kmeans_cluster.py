@@ -25,7 +25,6 @@ class Mapper(object):
             self.out_sums[nearest_ind] += feat
         except KeyError:
             self.out_sums[nearest_ind] = feat
-        yield
 
     def close(self):
         for nearest_ind, feat in self.out_sums.iteritems():
