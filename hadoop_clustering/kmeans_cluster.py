@@ -7,35 +7,49 @@ import numpy as np
 
 import hadoopy
 
+import profile
 
-class Mapper(object):
+class Mapper(profile.ProfileJob):
     def __init__(self):
-        self.out_sums = {}
+        super(Mapper, self).__init__()
         with open(os.environ["CLUSTERS_PKL"]) as fp:
             self.clusters = pickle.load(fp)
         self.nn = __import__(os.environ['NN_MODULE'],
                              fromlist=['nn']).nn
-        self.start_time = time.time()
         
-    def map(self, key, feat):
-        feat = np.fromstring(feat, dtype=np.float32)
-        nearest_ind = self.nn(feat, self.clusters)[0]
+    def map(self, key, feat_str):
+        # Extends the array by 1 dim that has a 1. in it
+        feat_str += '\x00\x00\x80?'
+        feat = np.fromstring(feat_str, dtype=np.float32)
+        nearest_ind = self.nn(feat[0:-1], self.clusters)[0]
         # Expand the array by 1 and use it to normalize later
-        feat = np.resize(feat, feat.shape[0] + 1)
-        feat[-1] = 1
-        try:
-            self.out_sums[nearest_ind] += feat
-        except KeyError:
-            self.out_sums[nearest_ind] = feat
+        yield nearest_ind, feat_str
 
     def close(self):
-        for nearest_ind, feat in self.out_sums.iteritems():
-            yield nearest_ind, feat.tostring()
-        hadoopy.counter('kmeans_cluster','run_time', int(time.time() - self.start_time))
+        super(Mapper, self).close()
 
-class Reducer(object):
+
+class Combiner(profile.ProfileJob):
     def __init__(self):
-        self.start_time = time.time()
+        super(Combiner, self).__init__()
+
+    def reduce(self, key, values):
+        cur_cluster_sum = None
+        for vec in values:
+            vec = np.fromstring(vec, dtype=np.float32)
+            try:
+                cur_cluster_sum += vec
+            except TypeError:
+                cur_cluster_sum = vec
+        yield key, cur_cluster_sum.tostring()
+    
+    def close(self):
+        super(Combiner, self).close()
+
+
+class Reducer(profile.ProfileJob):
+    def __init__(self):
+        super(Reducer, self).__init__()
 
     def reduce(self, key, values):
         cur_cluster_sum = None
@@ -49,9 +63,9 @@ class Reducer(object):
         yield key, center.tostring()
     
     def close(self):
-        hadoopy.counter('kmeans_cluster','run_time', int(time.time() - self.start_time))
+        super(Reducer, self).close()
 
 
 if __name__ == "__main__":
-    if hadoopy.run(Mapper, Reducer):
+    if hadoopy.run(Mapper, Reducer, Combiner):
         hadoopy.print_doc_quit(__doc__)

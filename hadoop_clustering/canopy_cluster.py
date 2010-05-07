@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import os
 import random
+import time
 
 import numpy as np
 
@@ -13,7 +14,7 @@ class MapReduce(object):
         try:
             nn_mod = os.environ['NN_MODULE']
         except KeyError:
-            nn_mod = 'nn_l2'
+            nn_mod = 'nn_l2sqr'
 
         self.nn = __import__(nn_mod,
                              fromlist=['nn']).nn
@@ -23,14 +24,40 @@ class MapReduce(object):
         except KeyError:
             self.soft_dist = 1.
             self.hard_dist = .25
+        self.start_time = time.time()
+        self.ftime = 0
+        self.gtime = 0
+
+    @staticmethod
+    def _strto2d(feat):
+        feat = np.fromstring(feat, dtype=np.float32)
+        return feat.reshape((1, feat.shape[0]))
         
     def map(self, key, feat):
+        stime = time.time()
+        feat = self._strto2d(feat)
+        self.ftime += time.time() - stime
+        stime = time.time()
+        if self.canopies.size:
+            nearest_dist = self.nn(feat, self.canopies)[1]
+            if nearest_dist > self.hard_dist:
+                hadoopy.counter('canopy_cluster', 'canopy_count')
+                self.canopies = np.concatenate((self.canopies, feat))
+        else:
+            hadoopy.counter('canopy_cluster', 'canopy_count')
+            self.canopies = feat
+        self.gtime += time.time() - stime
+
+
+    def amap(self, key, feat):
         feat = np.array([np.fromstring(feat, dtype=np.float32)])
         if self.canopies.size:
             nearest_dist = self.nn(feat, self.canopies)[1]
             if nearest_dist > self.hard_dist:
+                hadoopy.counter('canopy_cluster', 'canopy_count')
                 self.canopies = np.concatenate((self.canopies, feat))
         else:
+            hadoopy.counter('canopy_cluster', 'canopy_count')
             self.canopies = feat
 
     def reduce(self, key, feats):
@@ -41,6 +68,7 @@ class MapReduce(object):
         return np.array(random.sample(canopies, 1))
 
     def close(self):
+        hadoopy.status('%f-%f' % (self.ftime, self.gtime))
         final_canopies = self._random_canopy(self.canopies)
         uncovered_points = True
         while uncovered_points:
@@ -58,6 +86,7 @@ class MapReduce(object):
                 self.canopies = valid_canopies
         for canopy in final_canopies:
             yield random.random(), canopy.tostring()
+        hadoopy.counter('canopy_cluster','run_time', int(time.time() - self.start_time))
 
 
 if __name__ == "__main__":

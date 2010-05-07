@@ -14,8 +14,8 @@ def nn(feature, clusters):
     Returns:
         An int representing the nearest neighbor index into clusters.
     """
-    feature = np.array(feature, dtype=np.float32)
-    clusters = np.array(clusters, dtype=np.float32)
+    feature = np.array(feature, dtype=np.float32, copy=False)
+    clusters = np.array(clusters, dtype=np.float32, copy=False)
     out = knearest_neighbor_l1.nn(feature, clusters, 1)
     return out[0][0], float(out[1][0])
     

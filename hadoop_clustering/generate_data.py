@@ -14,12 +14,14 @@ class Mapper(object):
     def map(self, key, value):
         if not self.dead:
             self.dead = True
-            var = .5 * np.eye(self.num_dims)
             for i in range(self.num_clusters):
-                mu = [i] * self.num_dims
-                rnd = np.random.multivariate_normal(mu, var, self.num_points)
+                rnd = np.random.random((self.num_points, self.num_dims)) + i
                 for j in np.array(rnd, dtype=np.float32):
                     yield i, j.tostring()
 
+def reducer(key, values):
+    for value in values:
+        yield key, value
+
 if __name__ == "__main__":
-    hadoopy.run(Mapper, doc=__doc__)
+    hadoopy.run(Mapper, reducer, doc=__doc__)
