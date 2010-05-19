@@ -43,21 +43,32 @@ def gen_data(num_clusters, num_points, num_dims):
                        cmdenvs=['NUM_CLUSTERS=%d' % (num_clusters),
                                 'NUM_POINTS=%d' % (num_points),
                                 'NUM_DIMS=%d' % (num_dims)],
+                       reducer=None,
+                       #jobconfs='mapred.reduce.tasks=20',
                        frozen_path='frozen')
 
 
-def canopy():
+def canopy(input_path, output_path, num_clusters, cluster_path, num_reducers):
+    def inc_path():
+        global iter_cnt
+        iter_cnt +=1
+        return '%s/%d' % (output_path, iter_cnt)
+    def prev_path():
+        return '%s/%d' % (output_path, iter_cnt)
+    soft = str(4000.)
+    hard = str(250.)
+
     hadoopy.freeze(script_path='canopy_cluster.py',
                    shared_libs=SHARED_LIBS,
-                   modules=['vitrieve_algorithms', 'nn_l2sqr'],
+                   modules=['vitrieve_algorithms', 'nn_l2sqr_c'],
                    remove_dir=True)
     hadoopy.run_hadoop(in_name=input_path,
                        out_name=inc_path(),
                        script_path='canopy_cluster.py',
                        files='nn_l2sqr.py',
-                       cmdenvs=['NN_MODULE=nn_l2sqr',
-                                'CANOPY_SOFT_DIST=8.',
-                                'CANOPY_HARD_DIST=2.'],
+                       cmdenvs=['NN_MODULE=nn_l2sqr_c',
+                                'CANOPY_SOFT_DIST=%s' % (soft),
+                                'CANOPY_HARD_DIST=%s' % (hard)],
                        frozen_path='frozen')
     consolidate_clusters(prev_path(), 'canopies.pkl')
 
@@ -66,50 +77,36 @@ def canopy():
     hadoopy.run_hadoop(in_name=input_path,
                        out_name=inc_path(),
                        script_path='canopy_cluster_assign.py',
-                       cmdenvs=['CANOPY_SOFT_DIST=8.',
+                       cmdenvs=['CANOPY_SOFT_DIST=%s' % (soft),
                                 'CANOPIES_PKL=' + 'canopies.pkl'],
                        files='canopies.pkl',
                        reducer=None,
                        frozen_path='frozen')
     input_path = prev_path()
 
-    hadoopy.freeze(script_path='canopy_cluster_assign.py',
-                   remove_dir=True)
-    hadoopy.run_hadoop(in_name=prev_path(),
+    hadoopy.run_hadoop(in_name=cluster_path,
                        out_name=inc_path(),
                        script_path='canopy_cluster_assign.py',
-                       cmdenvs=['CANOPY_SOFT_DIST=8.',
+                       cmdenvs=['CANOPY_SOFT_DIST=%s' % (soft),
                                 'CANOPIES_PKL=' + 'canopies.pkl'],
                        files='canopies.pkl',
                        reducer=None,
                        frozen_path='frozen')
     consolidate_canopy_clusters(prev_path(), 'clusters.pkl')
 
-
     hadoopy.freeze(script_path='kmeans_canopy_cluster.py',
                    shared_libs=SHARED_LIBS,
-                   modules=['vitrieve_algorithms', 'nn_l2sqr',],
+                   modules=['vitrieve_algorithms', 'nn_l2sqr_c',],
                    remove_dir=True)
     hadoopy.run_hadoop(in_name=input_path,
                        out_name=inc_path(),
                        script_path='kmeans_canopy_cluster.py',
                        cmdenvs=['CLUSTERS_PKL=%s' % ('clusters.pkl'),
-                                'CANOPY_SOFT_DIST=8.',
-                                 'NN_MODULE=nn_l2sqr'],
-                       files=['nn_l2sqr.py', 'clusters.pkl'],
+                                'CANOPY_SOFT_DIST=%s' % (soft),
+                                 'NN_MODULE=nn_l2sqr_c'],
+                       files=['nn_l2sqr_c.py', 'clusters.pkl'],
                        frozen_path='frozen')
 
-    hadoopy.freeze(script_path='canopy_cluster_assign.py',
-                   remove_dir=True)
-    hadoopy.run_hadoop(in_name=prev_path(),
-                       out_name=inc_path(),
-                       script_path='canopy_cluster_assign.py',
-                       cmdenvs=['CANOPY_SOFT_DIST=8.',
-                                'CANOPIES_PKL=' + 'canopies.pkl'],
-                       files='canopies.pkl',
-                       reducer=None,
-                       frozen_path='frozen')
-    consolidate_canopy_clusters(prev_path(), 'clusters.pkl')
 
 
 def random_cluster(input_path, output_path, num_clusters, cluster_path, num_reducers):
@@ -141,26 +138,39 @@ def main(input_path, output_path, num_clusters, cluster_path, num_reducers):
         return '%s/%d' % (output_path, iter_cnt)
     consolidate_clusters(cluster_path, 'clusters.pkl')
     if 1:
-        hadoopy.freeze(script_path='kmeans_cluster_imc.py',
+        hadoopy.freeze(script_path='kmeans_cluster.py',
                        shared_libs=SHARED_LIBS,
-                       modules=['vitrieve_algorithms', 'nn_l2sqr',],
+                       modules=['vitrieve_algorithms', 'nn_l2sqr_c',],
                        remove_dir=True)
         hadoopy.run_hadoop(in_name=input_path,
                            out_name=inc_path(),
-                           script_path='kmeans_cluster_imc.py',
+                           script_path='kmeans_cluster.py',
                            cmdenvs=['CLUSTERS_PKL=%s' % ('clusters.pkl'),
-                                     'NN_MODULE=nn_l2sqr'],
+                                     'NN_MODULE=nn_l2sqr_c'],
                            #combiner=True,
-                           files=['nn_l2sqr.py','clusters.pkl'],
+                           files=['nn_l2sqr_c.py','clusters.pkl'],
                            jobconfs='mapred.reduce.tasks=%d' % (num_reducers),
                            frozen_path='frozen')
         #consolidate_clusters(prev_path(), 'clusters.pkl')
  
 if __name__ == '__main__':
-    prefix = str(random.random())
-    print('Prefix: ' + prefix)
-    for x, y, z, q in [[0, '100-20-1000', 100, 10], [1, '100-200-1000', 100, 10], [2, '100-2000-1000', 100, 10]]:
-        main('/tmp/bwhite/input/synth_clusters/' + y, '/tmp/bwhite/output/clusters/' + prefix, z, '/tmp/bwhite/output/clusters/0.0224482235528/' + str(x), q)
+    for run_num in range(1):
+        prefix = str(random.random())
+        print('Prefix: ' + prefix)
+        iter_cnt = -1
+        dat = [[0, '100-20-1000', 100, 10],
+               [1, '100-110-1000', 100, 10], 
+               [2, '100-200-1000', 100, 10],
+               [3, '100-1100-1000', 100, 10],
+               [4, '100-2000-1000', 100, 10], 
+               [5, '100-11000-1000', 100, 10],
+               [6, '100-20000-1000', 100, 10]]
+        for x, y, z, q in dat:
+            random_cluster('/tmp/bwhite/input/synth_clusters/' + y, '/tmp/bwhite/output/clusters/' + prefix, z, '/tmp/bwhite/output/clusters/0.221254080355/' + str(x), q)
+    #gen_data(100, 20000, 1000)
+    #gen_data(100, 11000, 1000)
+    #gen_data(100, 1100, 1000)
+    #gen_data(100, 110, 1000)
     #gen_data(100, 20, 1000) # 400 Meg
     #gen_data(100, 200, 1000) # 4 Gig
     #gen_data(100, 2000, 1000) # 40 Gig

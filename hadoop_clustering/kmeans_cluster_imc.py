@@ -15,7 +15,7 @@ class Mapper(profile.ProfileJob):
         super(Mapper, self).__init__()
         with open(os.environ["CLUSTERS_PKL"]) as fp:
             self.clusters = pickle.load(fp)
-        self.out_sums = [None] * len(self.clusters)
+        self.out_sums = {}
         self.nn = __import__(os.environ['NN_MODULE'],
                              fromlist=['nn']).nn
 
@@ -25,15 +25,12 @@ class Mapper(profile.ProfileJob):
         nearest_ind = self.nn(feat[0:-1], self.clusters)[0]
         try:
             self.out_sums[nearest_ind] += feat
-        except TypeError:
+        except KeyError:
             self.out_sums[nearest_ind] = feat
 
     def close(self):
-        for nearest_ind, out_sum in enumerate(self.out_sums):
-            try:
-                yield nearest_ind, out_sum.tostring()
-            except AttributeError:
-                pass
+        for nearest_ind, out_sum in self.out_sums.iteritems():
+            yield nearest_ind, out_sum.tostring()
         super(Mapper, self).close()
 
 class Reducer(profile.ProfileJob):

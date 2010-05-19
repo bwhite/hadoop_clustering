@@ -5,8 +5,9 @@ import cPickle as pickle
 import numpy as np
 
 import hadoopy
+import profile
 
-class Mapper(object):
+class Mapper(profile.ProfileJob):
     def __init__(self):
         self.out_sums = {}
         with open(os.environ["CLUSTERS_PKL"]) as fp:
@@ -15,18 +16,17 @@ class Mapper(object):
                              fromlist=['nn']).nn
         
     def map(self, key, feat):
-        feat = np.fromstring(feat, dtype=np.float32)
         canopies = key[1]
         cluster_ids = [self.canopy_clusters[x] for x in canopies if x in self.canopy_clusters]
         if not any(cluster_ids):
             return
         cluster_ids = list(set.union(*cluster_ids))
         clusters = self.clusters[cluster_ids]
+
         # Find NN using slow metric
-        nearest_ind = cluster_ids[self.nn(feat, clusters)[0]]
-        # Expand the array by 1 and use it to normalize later
-        feat = np.resize(feat, feat.shape[0] + 1)
-        feat[-1] = 1
+        # Extends the array by 1 dim that has a 1. in it
+        feat = np.fromstring(feat + '\x00\x00\x80?', dtype=np.float32)
+        nearest_ind = self.nn(feat[0:-1], self.clusters)[0]
         try:
             self.out_sums[nearest_ind] += feat
         except KeyError:
@@ -46,7 +46,6 @@ def reducer(key, values):
             cur_cluster_sum = vec
     center = cur_cluster_sum[0:-1] / cur_cluster_sum[-1]
     yield key, center.tostring()
-
 
 
 if __name__ == "__main__":
