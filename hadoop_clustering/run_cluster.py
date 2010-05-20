@@ -8,7 +8,7 @@ VA = '/home/brandyn/projects/image_retrieval/vitrieve_algorithms/vitrieve_algori
 SHARED_LIBS = glob.glob(VA + 'lib/*')
 
 def consolidate_clusters(output, cluster_pkl):
-    clusters = list(hadoopy.hdfs_cat_tb(output + '/p*'))
+    clusters = list(hadoopy.cat(output + '/p*'))
     clusters.sort(lambda x, y: cmp(x[0], y[0]))
     clusters = np.array([np.fromstring(x[1], dtype=np.float32) for x in clusters])
     with open(cluster_pkl, 'w') as fp:
@@ -25,7 +25,7 @@ def _map_cluster_canopies(cluster_canopies):
     return canopy_clusters
 
 def consolidate_canopy_clusters(output, cluster_pkl):
-    clusters = list(hadoopy.hdfs_cat_tb(output + '/p*'))
+    clusters = list(hadoopy.cat(output + '/p*'))
     clusters.sort(lambda x, y: cmp(x[0][0], y[0][0]))
     cluster_canopies = [(x, y[0][1]) for x, y in enumerate(clusters)]
     canopy_clusters = _map_cluster_canopies(cluster_canopies)
@@ -37,7 +37,7 @@ def consolidate_canopy_clusters(output, cluster_pkl):
 def gen_data(num_clusters, num_points, num_dims):
     hadoopy.freeze(script_path='generate_data.py',
                    remove_dir=True)
-    hadoopy.run_hadoop(in_name='/tmp/bwhite/input/synth_clusters/dummy',
+    hadoopy.launch(in_name='/tmp/bwhite/input/synth_clusters/dummy',
                        out_name='/tmp/bwhite/input/synth_clusters/%d-%d-%d' % (num_clusters, num_points, num_dims),
                        script_path='generate_data.py',
                        cmdenvs=['NUM_CLUSTERS=%d' % (num_clusters),
@@ -62,7 +62,7 @@ def canopy(input_path, output_path, num_clusters, cluster_path, num_reducers):
                    shared_libs=SHARED_LIBS,
                    modules=['vitrieve_algorithms', 'nn_l2sqr_c'],
                    remove_dir=True)
-    hadoopy.run_hadoop(in_name=input_path,
+    hadoopy.launch(in_name=input_path,
                        out_name=inc_path(),
                        script_path='canopy_cluster.py',
                        files='nn_l2sqr.py',
@@ -74,7 +74,7 @@ def canopy(input_path, output_path, num_clusters, cluster_path, num_reducers):
 
     hadoopy.freeze(script_path='canopy_cluster_assign.py',
                    remove_dir=True)
-    hadoopy.run_hadoop(in_name=input_path,
+    hadoopy.launch(in_name=input_path,
                        out_name=inc_path(),
                        script_path='canopy_cluster_assign.py',
                        cmdenvs=['CANOPY_SOFT_DIST=%s' % (soft),
@@ -84,7 +84,7 @@ def canopy(input_path, output_path, num_clusters, cluster_path, num_reducers):
                        frozen_path='frozen')
     input_path = prev_path()
 
-    hadoopy.run_hadoop(in_name=cluster_path,
+    hadoopy.launch(in_name=cluster_path,
                        out_name=inc_path(),
                        script_path='canopy_cluster_assign.py',
                        cmdenvs=['CANOPY_SOFT_DIST=%s' % (soft),
@@ -98,7 +98,7 @@ def canopy(input_path, output_path, num_clusters, cluster_path, num_reducers):
                    shared_libs=SHARED_LIBS,
                    modules=['vitrieve_algorithms', 'nn_l2sqr_c',],
                    remove_dir=True)
-    hadoopy.run_hadoop(in_name=input_path,
+    hadoopy.launch(in_name=input_path,
                        out_name=inc_path(),
                        script_path='kmeans_canopy_cluster.py',
                        cmdenvs=['CLUSTERS_PKL=%s' % ('clusters.pkl'),
@@ -118,7 +118,7 @@ def random_cluster(input_path, output_path, num_clusters, cluster_path, num_redu
                    shared_libs=SHARED_LIBS,
                    modules=['vitrieve_algorithms'],
                    remove_dir=True)
-    hadoopy.run_hadoop(in_name=input_path,
+    hadoopy.launch(in_name=input_path,
                        out_name=inc_path(),
                        cmdenvs=['NUM_CLUSTERS=%d' % (num_clusters)],
                        script_path='random_cluster.py',
@@ -142,7 +142,7 @@ def main(input_path, output_path, num_clusters, cluster_path, num_reducers):
                        shared_libs=SHARED_LIBS,
                        modules=['vitrieve_algorithms', 'nn_l2sqr_c',],
                        remove_dir=True)
-        hadoopy.run_hadoop(in_name=input_path,
+        hadoopy.launch(in_name=input_path,
                            out_name=inc_path(),
                            script_path='kmeans_cluster.py',
                            cmdenvs=['CLUSTERS_PKL=%s' % ('clusters.pkl'),
@@ -166,7 +166,7 @@ if __name__ == '__main__':
                [5, '100-11000-1000', 100, 10],
                [6, '100-20000-1000', 100, 10]]
         for x, y, z, q in dat:
-            random_cluster('/tmp/bwhite/input/synth_clusters/' + y, '/tmp/bwhite/output/clusters/' + prefix, z, '/tmp/bwhite/output/clusters/0.221254080355/' + str(x), q)
+            main('/tmp/bwhite/input/synth_clusters/' + y, '/tmp/bwhite/output/clusters/' + prefix, z, '/tmp/bwhite/output/clusters/0.991472772397/' + str(x), q)
     #gen_data(100, 20000, 1000)
     #gen_data(100, 11000, 1000)
     #gen_data(100, 1100, 1000)
