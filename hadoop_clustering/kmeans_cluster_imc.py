@@ -33,6 +33,25 @@ class Mapper(profile.ProfileJob):
             yield nearest_ind, out_sum.tostring()
         super(Mapper, self).close()
 
+
+class Combiner(profile.ProfileJob):
+    def __init__(self):
+        super(Combiner, self).__init__()
+
+    def reduce(self, key, values):
+        cur_cluster_sum = None
+        for vec in values:
+            vec = np.fromstring(vec, dtype=np.float32)
+            try:
+                cur_cluster_sum += vec
+            except TypeError:
+                cur_cluster_sum = vec
+        yield key, cur_cluster_sum.tostring()
+    
+    def close(self):
+        super(Combiner, self).close()
+
+
 class Reducer(profile.ProfileJob):
     def __init__(self):
         super(Reducer, self).__init__()
@@ -53,5 +72,5 @@ class Reducer(profile.ProfileJob):
 
 
 if __name__ == "__main__":
-    if hadoopy.run(Mapper, Reducer):
+    if hadoopy.run(Mapper, Reducer, Combiner):
         hadoopy.print_doc_quit(__doc__)
