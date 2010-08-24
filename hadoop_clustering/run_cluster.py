@@ -35,17 +35,16 @@ def consolidate_canopy_clusters(output, cluster_pkl):
 
 
 def gen_data(num_clusters, num_points, num_dims):
-    hadoopy.freeze(script_path='generate_data.py',
-                   remove_dir=True)
-    hadoopy.launch(in_name='/tmp/bwhite/input/synth_clusters/dummy',
-                       out_name='/tmp/bwhite/input/synth_clusters/%d-%d-%d' % (num_clusters, num_points, num_dims),
-                       script_path='generate_data.py',
-                       cmdenvs=['NUM_CLUSTERS=%d' % (num_clusters),
-                                'NUM_POINTS=%d' % (num_points),
-                                'NUM_DIMS=%d' % (num_dims)],
-                       reducer=None,
-                       #jobconfs='mapred.reduce.tasks=20',
-                       frozen_path='frozen')
+    hadoopy.launch_frozen(in_name='/tmp/bwhite/input/synth_clusters/dummy',
+                          out_name='/tmp/bwhite/input/synth_clusters/%d-%d-%d' % (num_clusters, num_points, num_dims),
+                          script_path='generate_data.py',
+                          remove_dir=True,
+                          cmdenvs=['NUM_CLUSTERS=%d' % (num_clusters),
+                                   'NUM_POINTS=%d' % (num_points),
+                                   'NUM_DIMS=%d' % (num_dims)],
+                          #reducer=None,
+                          jobconfs='mapred.reduce.tasks=30',
+                          frozen_path='frozen')
 
 
 def canopy(input_path, output_path, num_clusters, cluster_path, num_reducers):
@@ -122,7 +121,7 @@ def random_cluster(input_path, output_path, num_clusters, cluster_path, num_redu
                        out_name=inc_path(),
                        cmdenvs=['NUM_CLUSTERS=%d' % (num_clusters)],
                        script_path='random_cluster.py',
-                       combiner=True,
+                       #combiner=True,
                        frozen_path='frozen')
 
  
@@ -138,19 +137,22 @@ def main(input_path, output_path, num_clusters, cluster_path, num_reducers):
         return '%s/%d' % (output_path, iter_cnt)
     consolidate_clusters(cluster_path, 'clusters.pkl')
     if 1:
-        hadoopy.freeze(script_path='kmeans_cluster.py',
-                       shared_libs=SHARED_LIBS,
-                       modules=['vitrieve_algorithms', 'nn_l2sqr_c',],
-                       remove_dir=True)
-        hadoopy.launch(in_name=input_path,
-                           out_name=inc_path(),
-                           script_path='kmeans_cluster.py',
-                           cmdenvs=['CLUSTERS_PKL=%s' % ('clusters.pkl'),
-                                     'NN_MODULE=nn_l2sqr_c'],
-                           #combiner=True,
-                           files=['nn_l2sqr_c.py','clusters.pkl'],
-                           jobconfs='mapred.reduce.tasks=%d' % (num_reducers),
-                           frozen_path='frozen')
+        hadoopy.launch_frozen(in_name=input_path,
+                              out_name=inc_path(),
+                              script_path='kmeans_cluster_single.py',
+                              reducer=None,
+                              cmdenvs=['CLUSTERS_PKL=%s' % ('clusters.pkl'),
+                                       'NN_MODULE=nn_l2sqr_c'],
+                              #combiner=True,
+                              files=['nn_l2sqr_c.py','clusters.pkl'],
+                              shared_libs=SHARED_LIBS,
+                              modules=['vitrieve_algorithms', 'nn_l2sqr_c',],
+                              remove_dir=True,
+                              jobconfs=['mapred.min.split.size=999999999999',
+                                        'mapred.reduce.tasks=%d' % (num_reducers)])
+                                        #'mapred.map.output.compression.codec=org.apache.hadoop.io.compress.GzipCodec',
+                                        #'mapred.map.output.compression.type=BLOCK',
+                                        #'mapred.compress.map.output=true'])
         #consolidate_clusters(prev_path(), 'clusters.pkl')
  
 if __name__ == '__main__':
@@ -158,15 +160,18 @@ if __name__ == '__main__':
         prefix = str(random.random())
         print('Prefix: ' + prefix)
         iter_cnt = -1
-        dat = [[0, '100-20-1000', 100, 10],
-               [1, '100-110-1000', 100, 10], 
-               [2, '100-200-1000', 100, 10],
-               [3, '100-1100-1000', 100, 10],
-               [4, '100-2000-1000', 100, 10], 
-               [5, '100-11000-1000', 100, 10],
-               [6, '100-20000-1000', 100, 10]]
+        dat = [[0, '100-20-1000', 100, 1],
+               [1, '100-110-1000', 100, 1], 
+               [2, '100-200-1000', 100, 1],
+               [3, '100-1100-1000', 100, 1],
+               [4, '100-2000-1000', 100, 1]]#, 
+               #[5, '100-11000-1000', 100, 1],
+               #[6, '100-20000-1000', 100, 1]]
         for x, y, z, q in dat:
-            main('/tmp/bwhite/input/synth_clusters/' + y, '/tmp/bwhite/output/clusters/' + prefix, z, '/tmp/bwhite/output/clusters/0.991472772397/' + str(x), q)
+            #main('/tmp/bwhite/input/synth_clusters/' + y, '/tmp/bwhite/output/clusters/' + prefix, z, '/tmp/bwhite/output/clusters/0.991472772397/' + str(x), q)
+            main('/tmp/bwhite/output/clusters/0.252632615449/' + str(x), '/tmp/bwhite/output/clusters/' + prefix, z, '/tmp/bwhite/output/clusters/0.991472772397/' + str(x), q)
+            
+
     #gen_data(100, 20000, 1000)
     #gen_data(100, 11000, 1000)
     #gen_data(100, 1100, 1000)
